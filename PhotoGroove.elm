@@ -4,32 +4,36 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 import Html.App
-
-type alias Photo = 
-    { url: String }
-
-type alias Model =
-    { photos: List Photo, selectedUrl : String }
-
-type alias Msg = 
-    { operation : String, data : String }
+import Random
 
 urlPrefix : String
 urlPrefix = "http://elm-in-action.com/"
 
-initialModel : Model
-initialModel = 
-    { photos = 
-        [ { url = "1.jpeg"}
-        , { url = "2.jpeg"}
-        , { url = "3.jpeg"}
-        ]
-    , selectedUrl = "1.jpeg"
-    }
+type ThumbnailSize
+    = Small
+    | Medium
+    | Large
 
-photoArray : Array Photo
-photoArray =
-    Array.fromList initialModel.photos
+view
+    : Model
+    -> Html Msg
+view model = 
+  div [ class "content" ]
+        [ h1 [] [ text "Photo Groove" ]
+        , button 
+            [ onClick SurpriseMe ]
+            [ text "Surprise Me!" ]
+        , h3 [] [ text "Thumbnail size" ]
+        , div [ id "choose-size" ]
+            (List.map viewSizeChooser [ Small, Medium, Large ])
+        , div [ id "thumbnails", class (sizeToString model.chosenSize) ] 
+            (List.map (viewThumbnail model.selectedUrl) model.photos)
+        , img
+            [ class "large"
+            , src (urlPrefix ++ "large/" ++ model.selectedUrl)
+            ]
+            []
+        ]
 
 viewThumbnail 
     : String
@@ -40,44 +44,90 @@ viewThumbnail selectedUrl thumbnail =
     img
         [ src (urlPrefix ++ thumbnail.url) 
         , classList [ ( "selected", selectedUrl == thumbnail.url ) ]
-        , onClick { operation = "SELECT_PHOTO", data = thumbnail.url }
+        , onClick (SelectByUrl thumbnail.url)
         ] []
 
-view
-    : Model
-    -> Html Msg
-view model = 
-  div [ class "content" ]
-        [ h1 [] [ text "Photo Groove" ]
-        , button 
-            [ onClick { operation = "SURPRISE_ME", data = "" }]
-            [ text "Surprise Me!" ]
-        , div [ id "thumbnails" ] 
-            (List.map (viewThumbnail model.selectedUrl) model.photos)
-        , img
-            [ class "large"
-            , src (urlPrefix ++ "large/" ++ model.selectedUrl)
-            ]
-            []
+viewSizeChooser : ThumbnailSize -> Html Msg
+viewSizeChooser size = 
+    label []
+        [ input [ type' "radio", name "size", onClick (SetSize size) ] []
+        , text (sizeToString size)
         ]
+
+sizeToString : ThumbnailSize -> String
+sizeToString size = 
+    case size of
+        Small ->
+            "small"
+        Medium -> 
+            "medium"
+        Large ->
+            "large"
+
+type alias Photo = 
+    { url: String }
+
+type alias Model =
+    { photos: List Photo
+    , selectedUrl : String
+    , chosenSize: ThumbnailSize
+    }
+
+initialModel : Model
+initialModel = 
+    { photos = 
+        [ { url = "1.jpeg"}
+        , { url = "2.jpeg"}
+        , { url = "3.jpeg"}
+        ]
+    , selectedUrl = "1.jpeg"
+    , chosenSize = Medium
+    }
+
+photoArray : Array Photo
+photoArray =
+    Array.fromList initialModel.photos
+
+getPhotoUrl : Int -> String
+getPhotoUrl index =
+    case Array.get index photoArray of
+        Just photo ->
+            photo.url
+
+        Nothing ->
+            ""
+
+randomPhotoPicker : Random.Generator Int
+randomPhotoPicker =
+    Random.int 0 (Array.length photoArray - 1)
+
+type Msg
+    = SelectByUrl String
+    | SelectByIndex Int 
+    | SurpriseMe
+    | SetSize ThumbnailSize
 
 update
     : Msg
-    -> { a | selectedUrl: String }
-    -> { a | selectedUrl: String }
+    -> Model -> (Model, Cmd Msg)
+    
 update msg model = 
-    case msg.operation of
-        "SELECT_PHOTO" ->
-            { model | selectedUrl = msg.data }
-        "SURPRISE_ME" ->
-            { model | selectedUrl = "2.jpeg" }
-        _ ->
-            model
+    case msg of
+        SelectByUrl url ->
+            ( { model | selectedUrl = url }, Cmd.none )
+        SurpriseMe ->
+            (  model, Random.generate SelectByIndex randomPhotoPicker )
+        SetSize size ->
+            ( { model | chosenSize = size }, Cmd.none )
+        SelectByIndex index -> 
+            ( { model | selectedUrl = getPhotoUrl index}, Cmd.none )
+        
 
 main : Program Never
 main = 
-    Html.App.beginnerProgram
-        { model = initialModel
+    Html.App.program
+        { init = ( initialModel, Cmd.none)
         , view = view
         , update = update
+        , subscriptions = (\model -> Sub.none)
         }
